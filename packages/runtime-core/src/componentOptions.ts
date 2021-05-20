@@ -622,7 +622,7 @@ export function applyOptions(
         // and those are read-only but reconfigurable, so it needs to be redefined here
 
         // 开发环境会走这里
-        if (__DEV__) {
+        if (__DEV__)  {
           Object.defineProperty(ctx, key, {
             value: methodHandler.bind(publicThis),
             configurable: true,
