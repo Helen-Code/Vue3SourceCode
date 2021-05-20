@@ -2,6 +2,8 @@
 
 This is the repository for Vue 3.0.
 
+currentVersion is `3.0.11`
+
 ## Quickstart
 
 - Via CDN: `<script src="https://unpkg.com/vue@next"></script>`

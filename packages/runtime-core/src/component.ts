@@ -719,9 +719,13 @@ function finishComponentSetup(
   }
 
   // support for 2.x options
+
+  // 源码阅读-5/14日课
+  // 为了支持Vue2.X的options
   if (__FEATURE_OPTIONS_API__) {
     currentInstance = instance
     pauseTracking()
+    // applyOptions就是用来读取处理我们在vue实例中挂载的对象属性的，例如template,data,computed,methods等这些常用属性 ~>
     applyOptions(instance, Component)
     resetTracking()
     currentInstance = null

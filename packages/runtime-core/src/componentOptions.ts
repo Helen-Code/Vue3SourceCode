@@ -477,9 +477,10 @@ type DataFn = (vm: ComponentPublicInstance) => any
 
 export let shouldCacheAccess = true
 
+// 处理options
 export function applyOptions(
   instance: ComponentInternalInstance,
-  options: ComponentOptions,
+  options: ComponentOptions, // options就是我们在vue实例中挂载的对象属性，例如template,data,computed,methods等这些常用属性
   deferredData: DataFn[] = [],
   deferredWatch: ComponentWatchOptions[] = [],
   deferredProvide: (Data | Function)[] = [],
@@ -491,7 +492,7 @@ export function applyOptions(
     extends: extendsOptions,
     // state
     data: dataOptions,
-    computed: computedOptions,
+    computed: computedOptions, // 从options中取出computed对象，并且起一个别名叫: computedOptions
     methods,
     watch: watchOptions,
     provide: provideOptions,
@@ -518,7 +519,8 @@ export function applyOptions(
     expose
   } = options
 
-  const publicThis = instance.proxy!
+  // 响应式原理的proxy
+  const publicThis = instance.proxy! // 从组建实例中拿到的代理对象，这个代理对象中有我们定义的data数据
   const ctx = instance.ctx
   const globalMixins = instance.appContext.mixins
 
@@ -610,12 +612,16 @@ export function applyOptions(
     }
   }
 
+  // 判断methods这部分是否存在
   if (methods) {
+    // 将所有的methods遍历，这里取到的key其实就是函数名
     for (const key in methods) {
-      const methodHandler = (methods as MethodOptions)[key]
+      const methodHandler = (methods as MethodOptions)[key] // methodHandler其实就是函数对应的代码
       if (isFunction(methodHandler)) {
         // In dev mode, we use the `createRenderContext` function to define methods to the proxy target,
         // and those are read-only but reconfigurable, so it needs to be redefined here
+
+        // 开发环境会走这里
         if (__DEV__) {
           Object.defineProperty(ctx, key, {
             value: methodHandler.bind(publicThis),
@@ -624,6 +630,16 @@ export function applyOptions(
             writable: true
           })
         } else {
+          /**
+           * 生产环境会走这里
+           * ctx: context-click
+           * methodHandler: methods中定义的函数代码
+           *
+           * 这里做的事情就是，将methods中定义的函数通过bind绑定到ctx[key]这个对象中，同时改变了this的指向，这样在函数内部的this就会绑定到publicThis
+           * 同时，我们在template中定义的事件，例如：<div @click="sum"></div>,当事件触发的时候，就回去ctx中找同名的函数ctx.sum执行
+           * 这样就通过ctx将DOM事件和methods的事件绑定起来了
+           * */
+
           ctx[key] = methodHandler.bind(publicThis)
         }
         if (__DEV__) {
@@ -665,14 +681,38 @@ export function applyOptions(
     deferredData.push(dataOptions as DataFn)
   }
 
+  /**
+   * computed源码阅读 5-19日课
+   * computed有两种写法，一种是常见的函数的形式，还有一种是对象的形式
+   * // fullName 的 getter方法
+     fullName() {
+       return this.firstName + " " + this.lastName;
+     },
+     
+     // fullName的getter和setter方法
+     fullName: {
+       get: function() {
+         return this.firstName + " " + this.lastName;
+       },
+       set: function(newValue) {
+         console.log(newValue);
+         const names = newValue.split(" ");
+         this.firstName = names[0];
+         this.lastName = names[1];
+       }
+     }
+   * */
+
   if (computedOptions) {
+    // 遍历computed对象
     for (const key in computedOptions) {
-      const opt = (computedOptions as ComputedOptions)[key]
+      const opt = (computedOptions as ComputedOptions)[key] // 拿到computed对象中每一项的值
+      // 这里判断computed这一项是一个函数还是一个对象
       const get = isFunction(opt)
-        ? opt.bind(publicThis, publicThis)
-        : isFunction(opt.get)
+        ? opt.bind(publicThis, publicThis) // 如果是函数的形式，那么给这个计算属性通过bind绑定到Vue实例的代理对象上
+        : isFunction(opt.get) // 如果不是函数的形式，那么就判断fullName.get是否是一个函数，如果是，和上面操作一样
           ? opt.get.bind(publicThis, publicThis)
-          : NOOP
+          : NOOP // 如果不是，那么就赋值为null
       if (__DEV__ && get === NOOP) {
         warn(`Computed property "${key}" has no getter.`)
       }
@@ -686,6 +726,7 @@ export function applyOptions(
                 )
               }
             : NOOP
+      // 拿到get和set，然后通过computed进行计算属性的具体功能，响应式，双向绑定
       const c = computed({
         get,
         set

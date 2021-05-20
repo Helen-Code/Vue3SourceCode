@@ -470,9 +470,11 @@ function baseCreateRenderer(
 
   // Note: functions inside this closure should use `const xxx = () => {}`
   // style in order to prevent being inlined by minifiers.
+
+  // 对两个节点进行比对和操作
   const patch: PatchFn = (
-    n1,
-    n2,
+    n1, // n1表示旧的VNode，当n1为null时就表示是一次挂载(挂载还是更像是由n1决定的)，如果n1有值，那么就是更新操作，如果n1,n2相同，那么patch应该做的事情不多
+    n2, // n2表示新的VNode，更具n2的type进行不同的处理
     container,
     anchor = null,
     parentComponent = null,
@@ -523,6 +525,7 @@ function baseCreateRenderer(
         break
       default:
         if (shapeFlag & ShapeFlags.ELEMENT) {
+          // 如果是一个元素，那么调用processElement
           processElement(
             n1,
             n2,
@@ -535,6 +538,7 @@ function baseCreateRenderer(
             optimized
           )
         } else if (shapeFlag & ShapeFlags.COMPONENT) {
+          // 如果是一个组件，那么调用processComponent ~>
           processComponent(
             n1,
             n2,
@@ -1268,6 +1272,7 @@ function baseCreateRenderer(
           optimized
         )
       } else {
+        // 挂载组件
         mountComponent(
           n2,
           container,
@@ -1585,6 +1590,8 @@ function baseCreateRenderer(
     resetTracking()
   }
 
+  // 5/17课 => 虚拟DOM相关源码阅读
+  // 对比旧的VNodes和新的VNodes会调用该方法，算是diff算法的一部分
   const patchChildren: PatchChildrenFn = (
     n1,
     n2,
@@ -1596,16 +1603,20 @@ function baseCreateRenderer(
     slotScopeIds,
     optimized = false
   ) => {
-    const c1 = n1 && n1.children
+    // n1.children,n2.children是旧的VNodes和新的VNodes
+    const c1 = n1 && n1.children // n1.children的值赋给c1
     const prevShapeFlag = n1 ? n1.shapeFlag : 0
-    const c2 = n2.children
+    const c2 = n2.children // n2.children的值赋给c2
 
-    const { patchFlag, shapeFlag } = n2
+    const { patchFlag, shapeFlag } = n2 // 传入patchFlag
     // fast path
     if (patchFlag > 0) {
+      // 通过patchFlag和keyed_flagment(key是否存在的flag) 就可以判断key是否存在
       if (patchFlag & PatchFlags.KEYED_FRAGMENT) {
         // this could be either fully-keyed or mixed (some keyed some not)
         // presence of patchFlag means children are guaranteed to be arrays
+
+        // >> 如果key存在，那么执行patchKeyedChildren函数
         patchKeyedChildren(
           c1 as VNode[],
           c2 as VNodeArrayChildren,
@@ -1620,6 +1631,8 @@ function baseCreateRenderer(
         return
       } else if (patchFlag & PatchFlags.UNKEYED_FRAGMENT) {
         // unkeyed
+
+        // >> 如果key不存在，那么执行patchUnkeyedChildren函数
         patchUnkeyedChildren(
           c1 as VNode[],
           c2 as VNodeArrayChildren,
@@ -1687,9 +1700,11 @@ function baseCreateRenderer(
     }
   }
 
+  // >> 当没有key时执行
   const patchUnkeyedChildren = (
-    c1: VNode[],
-    c2: VNodeArrayChildren,
+    // c1,c2是两个数组
+    c1: VNode[], // 旧的VNodes  ["a","b","c","d"]
+    c2: VNodeArrayChildren, // 新的VNodes ["a","b","f","c","d"]
     container: RendererElement,
     anchor: RendererNode | null,
     parentComponent: ComponentInternalInstance | null,
@@ -1700,16 +1715,27 @@ function baseCreateRenderer(
   ) => {
     c1 = c1 || EMPTY_ARR
     c2 = c2 || EMPTY_ARR
-    const oldLength = c1.length
-    const newLength = c2.length
-    const commonLength = Math.min(oldLength, newLength)
+
+    const oldLength = c1.length // 获取旧数组的长度
+    const newLength = c2.length // 获取新数组的长度
+    const commonLength = Math.min(oldLength, newLength) // 取得最小数组的长度
+    // 开始遍历，从0位置开始一次patch比较，比较两个VNode是否相同
     let i
     for (i = 0; i < commonLength; i++) {
+      // 从新的数组中取出一个值，是nextChild
       const nextChild = (c2[i] = optimized
         ? cloneIfMounted(c2[i] as VNode)
         : normalizeVNode(c2[i]))
+      /**
+       * 执行patch函数，patch函数就是在比较，更新，如果两个节点相同，那么不会做什么操作
+       * 这种比对就是按顺序一个个比对元素类型，元素内容
+       * 如果类型不一样就创建新的类型
+       * 如果内容不不一致，那么就把对应的旧VNode的内容替换为新的VNode的内容
+       * 这种方式比较消耗性能，因为一个个遍历比对的时候，如果是插入操作，那么从插入位置开始后所有的VNode都会被更新
+       * */
+
       patch(
-        c1[i],
+        c1[i], // 从旧的数据中取出一个值
         nextChild,
         container,
         null,
@@ -1720,6 +1746,7 @@ function baseCreateRenderer(
         optimized
       )
     }
+    // 如果旧的节点数大于新的节点数，说明是删除节点的操作，这时候要从虚拟DOM中unmount这些VNode，相当于取消挂载这些节点
     if (oldLength > newLength) {
       // remove old
       unmountChildren(
@@ -1731,6 +1758,7 @@ function baseCreateRenderer(
         commonLength
       )
     } else {
+      // 如果新的节点大于等于旧的节点，那么就是新增或者编辑操作，对新增的Vnode进行挂载操作
       // mount new
       mountChildren(
         c2,
@@ -1747,6 +1775,8 @@ function baseCreateRenderer(
   }
 
   // can be all-keyed or mixed
+
+  // 有key的时候调用该方法，分为5个步骤
   const patchKeyedChildren = (
     c1: VNode[],
     c2: VNodeArrayChildren,
@@ -1760,17 +1790,24 @@ function baseCreateRenderer(
   ) => {
     let i = 0
     const l2 = c2.length
-    let e1 = c1.length - 1 // prev ending index
-    let e2 = l2 - 1 // next ending index
+    let e1 = c1.length - 1 // prev ending index  旧节点的最后一个下标
+    let e2 = l2 - 1 // next ending index    新节点的最后一个下标
 
-    // 1. sync from start
+    // 1. sync from start  i从0开始遍历
     // (a b) c
     // (a b) d e
+
     while (i <= e1 && i <= e2) {
-      const n1 = c1[i]
+      const n1 = c1[i] // 取出旧节点的值n1
       const n2 = (c2[i] = optimized
         ? cloneIfMounted(c2[i] as VNode)
         : normalizeVNode(c2[i]))
+      /**
+       * isSameVNodeType判断两个节点是否相同。判断的本质就是两个节点的type和key是否相同
+       * 如果两个节点相同,那进行patch，这样性能很高
+       *
+       * */
+
       if (isSameVNodeType(n1, n2)) {
         patch(
           n1,
@@ -1784,19 +1821,23 @@ function baseCreateRenderer(
           optimized
         )
       } else {
+        // 当两个类型不相同的时候，跳出循环,不进行patch了，因为不一样的节点patch性能太低
         break
       }
-      i++
+      i++ // 继续进行循环
     }
 
-    // 2. sync from end
+    // 2. sync from end   从尾部开始遍历
     // a (b c)
     // d e (b c)
+
     while (i <= e1 && i <= e2) {
+      // 取到尾部的两个元素
       const n1 = c1[e1]
       const n2 = (c2[e2] = optimized
         ? cloneIfMounted(c2[e2] as VNode)
         : normalizeVNode(c2[e2]))
+      // 判断是否相同，开始patch
       if (isSameVNodeType(n1, n2)) {
         patch(
           n1,
@@ -1810,6 +1851,7 @@ function baseCreateRenderer(
           optimized
         )
       } else {
+        // 一旦发现不一致的VNode，那么跳出当前循环
         break
       }
       e1--
@@ -1823,11 +1865,14 @@ function baseCreateRenderer(
     // (a b)
     // c (a b)
     // i = 0, e1 = -1, e2 = 0
+
+    // 如果新节点多:这里就是拿到前两步得到的i和e1,e2,在这里进行判断处理
     if (i > e1) {
       if (i <= e2) {
         const nextPos = e2 + 1
         const anchor = nextPos < l2 ? (c2[nextPos] as VNode).el : parentAnchor
         while (i <= e2) {
+          // 如果是和null进行patch,那么就是挂载节点
           patch(
             null,
             (c2[i] = optimized
@@ -1853,6 +1898,8 @@ function baseCreateRenderer(
     // a (b c)
     // (b c)
     // i = 0, e1 = 0, e2 = -1
+
+    // 如果是旧节点多,这里就是卸载旧节点
     else if (i > e2) {
       while (i <= e1) {
         unmount(c1[i], parentComponent, parentSuspense, true)
@@ -1864,6 +1911,15 @@ function baseCreateRenderer(
     // [i ... e1 + 1]: a b [c d e] f g
     // [i ... e2 + 1]: a b [e d c h] f g
     // i = 2, e1 = 4, e2 = 5
+
+    /**
+     * 这种情况是:如果旧节点和新节点中间部分相比较都是乱序的(不知道的序列),这里会做一些处理
+     * 这里的思路是：从新的VNodes中拿出节点去去旧VNodes的节点中寻找，看有没有一样的
+     * 1) 如果有一样的,那就patch
+     * 2) 如果发现某个节点在旧的里面没有而在新的里面有，那就新增
+     * 3) 如果发现某个节点在新的里面没有而在旧的里面有，那就删除该节点
+     *
+     * */
     else {
       const s1 = i // prev starting index
       const s2 = i // next starting index
