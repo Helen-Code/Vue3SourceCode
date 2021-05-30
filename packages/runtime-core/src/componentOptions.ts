@@ -726,7 +726,7 @@ export function applyOptions(
                 )
               }
             : NOOP
-      // 拿到get和set，然后通过computed进行计算属性的具体功能，响应式，双向绑定
+      // 拿到get和set，然后通过computed函数进行计算属性的具体功能，响应式，双向绑定
       const c = computed({
         get,
         set
