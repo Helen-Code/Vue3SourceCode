@@ -17,7 +17,11 @@ import {
 
 type AssignerFn = (value: any) => void
 
+// 
 const getModelAssigner = (vnode: VNode): AssignerFn => {
+  // fn这个函数的本质其实就是将当前input框的输入的值，赋值给input框绑定的变量，这样实现双向绑定
+  // <input v-model="searchText">
+  // 相当于@input="searchText = $event.target.value"
   const fn = vnode.props!['onUpdate:modelValue']
   return isArray(fn) ? value => invokeArrayFns(fn, value) : fn
 }
@@ -44,12 +48,19 @@ type ModelDirective<T> = ObjectDirective<T & { _assign: AssignerFn }>
 
 // We are exporting the v-model runtime directly as vnode hooks so that it can
 // be tree-shaken in case v-model is never used.
+
+// 第五次课程：v-model源码阅读
+// 页面DOM的v-model解析时候会执行vModelText函数
 export const vModelText: ModelDirective<
   HTMLInputElement | HTMLTextAreaElement
 > = {
   created(el, { modifiers: { lazy, trim, number } }, vnode) {
     el._assign = getModelAssigner(vnode)
     const castToNumber = number || el.type === 'number'
+    /**
+      @param {?Object} el el就是当前绑定v-model指令的dom对象，一般是input输入框
+      @param {?} lazy 修饰符，决定绑定change事件还是input事件,默认绑定的是input事件
+    */ 
     addEventListener(el, lazy ? 'change' : 'input', e => {
       if ((e.target as any).composing) return
       let domValue: string | number = el.value
@@ -58,6 +69,7 @@ export const vModelText: ModelDirective<
       } else if (castToNumber) {
         domValue = toNumber(domValue)
       }
+      // el._assign函数实际是上面定义的getModelAssigner函数
       el._assign(domValue)
     })
     if (trim) {
@@ -80,6 +92,7 @@ export const vModelText: ModelDirective<
     el.value = value == null ? '' : value
   },
   beforeUpdate(el, { value, modifiers: { trim, number } }, vnode) {
+    // 
     el._assign = getModelAssigner(vnode)
     // avoid clearing unresolved text. #2302
     if ((el as any).composing) return
