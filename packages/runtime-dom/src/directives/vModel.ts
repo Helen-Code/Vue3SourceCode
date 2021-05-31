@@ -17,7 +17,6 @@ import {
 
 type AssignerFn = (value: any) => void
 
-// 
 const getModelAssigner = (vnode: VNode): AssignerFn => {
   // fn这个函数的本质其实就是将当前input框的输入的值，赋值给input框绑定的变量，这样实现双向绑定
   // <input v-model="searchText">
